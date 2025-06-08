@@ -262,7 +262,7 @@ def tambah_stok_maggot(id_user):
         if not cur.fetchone():
             print(f"ID Maggot {id_maggot} tidak ditemukan atau bukan milik Anda. Coba lagi.")
             continue
-        
+
         while True:
             try:
                 jumlah = int(input("Jumlah (kg): "))
@@ -628,8 +628,6 @@ Menu Supplier:
 #========================= UPDATE ATAS !!============================
 def main():
     clear_screen()
-    conn = connect()
-    cur = conn.cursor()
     while True:
         print(
             """
@@ -644,38 +642,35 @@ def main():
 ║└────────────────┘║
 ╚══════════════════╝
             """)
-        pilihan = input("Masukkan pilihan [1,2,3] : ")
+        pilihan = input("Masukkan pilihan [1,2,3] : ").strip()
         match pilihan:
             case '1':
                 clear_screen()
                 print("Login sebagai :")
                 print("[1] User (Pembudidaya / Supplier)")
                 print("[2] Admin")
-                pilih = int(input("Masukkan pilihan login : "))
-
-                if pilih == 1:
+                pilih = input("Masukkan pilihan login : ").strip()
+                if pilih == "1":
                     user = login_user()
                     if user:
                         if user['role'] == 'pembudidaya':
-                            menu_pembudidaya(id_user=user['id_user'])
+                            menu_pembudidaya(user['id_user'])
                         elif user['role'] == 'supplier':
-                            menu_supplier(id_user=user['id_user'])
-                elif pilih == 2:
+                            menu_supplier(user['id_user'])
+                elif pilih == "2":
                     admin = login_admin()
                     if admin:
                         menu_admin(admin)
                 else:
                     print("Tidak ada pilihan")
-                return
             case '2':
                 print("Register sebagai  ")
                 print("[1] Pembudidaya")
                 print("[2] Supplier")
-                pilihan = int(input("Pilih Register : "))
-
-                if pilihan == 1:
+                reg_pilihan = input("Pilih Register : ").strip()
+                if reg_pilihan == '1':
                     register_pembudidaya()
-                elif pilihan == 2:
+                elif reg_pilihan == '2':
                     register_supplier()
                 else:
                     print("Tidak ada pilihan")
@@ -684,6 +679,7 @@ def main():
                 break
             case _:
                 print("Pilihan tidak ada")
+        input("\nTekan Enter untuk kembali...")
 
 main()
 
