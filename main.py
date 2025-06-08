@@ -164,7 +164,7 @@ def pengguna_online():
 
     print(f"\nDaftar {role.capitalize()}:")
     for row in hasil:
-        print(f"- ID: {row[0]}, Nama: {row[1]}, Email: {row[2]}, Login Terakhir Pada: {row[4]}")
+        print(f"- ID: {row[0]}, Nama: {row[1]}, Email: {row[2]}, Terakhir Login Pada: {row[4]}")
 
     cur.close()
     conn.close()
@@ -404,15 +404,23 @@ def terima_pesanan(id_user):
     cur = conn.cursor()
     cur.execute("SELECT ts.id_transaksi_sampah, u.nama_user, so.jenis_sampah, ts.jumlah_kg, ts.status FROM transaksi_sampah_organik ts JOIN sampah_organik so ON ts.id_sampah_organik = so.id_sampah_organik JOIN users u ON ts.id_pembeli = u.id_user WHERE so.id_supplier = %s AND ts.status = 'diproses'", (id_user,))
     rows = cur.fetchall()
-    print("Pesanan Masuk:")
-    for row in rows:
-        print(f"ID: {row[0]}, Pembeli: {row[1]}, Jenis: {row[2]}, Jumlah: {row[3]}kg, Status: {row[4]}")
-    id_pilih = input("Masukkan ID transaksi yang ingin diterima: ")
-    cur.execute("UPDATE transaksi_sampah_organik SET status = 'dikirim' WHERE id_transaksi_sampah = %s", (id_pilih,))
-    conn.commit()
+
+    print("\nPesanan Masuk:")
+    if not rows:
+        print("Tidak ada pesanan masuk.")
+    else:
+        for row in rows:
+            print(f"ID: {row[0]}, Pembeli: {row[1]}, Jenis: {row[2]}, Jumlah: {row[3]}kg, Status: {row[4]}")
+
+    id_pilih = input("Masukkan ID transaksi yang ingin diterima (atau tekan Enter untuk batal): ")
+    if id_pilih.strip():
+        cur.execute("UPDATE transaksi_sampah_organik SET status = 'dikirim' WHERE id_transaksi_sampah = %s", (id_pilih,))
+        conn.commit()
+        print("Transaksi diperbarui menjadi dikirim.")
+
     cur.close()
     conn.close()
-    print("Transaksi diperbarui menjadi dikirim.")
+    input("\nTekan Enter untuk kembali ke menu...")
 
 def beli_maggot(id_user):
         conn = connect()
@@ -443,22 +451,34 @@ def riwayat_penjualan(id_user):
     cur = conn.cursor()
     cur.execute("SELECT ts.id_transaksi_sampah, so.jenis_sampah, ts.jumlah_kg, ts.deskripsi FROM transaksi_sampah_organik ts JOIN sampah_organik so ON ts.id_sampah_organik = so.id_sampah_organik WHERE so.id_supplier = %s AND ts.status = 'diproses'", (id_user,))
     rows = cur.fetchall()
-    print("Riwayat Penjualan Sampah:")
-    for row in rows:
-        print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Catatan: {row[3]}")
+
+    print("\nRiwayat Penjualan Sampah:")
+    if not rows:
+        print("Belum ada riwayat penjualan.")
+    else:
+        for row in rows:
+            print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Catatan: {row[3]}")
+
     cur.close()
     conn.close()
+    input("\nTekan Enter untuk kembali ke menu...")
 
 def riwayat_pembelian(id_user):
     conn = connect()
     cur = conn.cursor()
     cur.execute("SELECT tm.id_transaksi_maggot, m.jenis_maggot, tm.jumlah_kg, tm.deskripsi FROM transaksi_maggot tm JOIN maggot m ON tm.id_maggot = m.id_maggot WHERE tm.id_pembeli = %s", (id_user,))
     rows = cur.fetchall()
-    print("Riwayat Pembelian Maggot:")
-    for row in rows:
-        print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Catatan: {row[3]}")
+
+    print("\nRiwayat Pembelian Maggot:")
+    if not rows:
+        print("Belum ada riwayat pembelian.")
+    else:
+        for row in rows:
+            print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Catatan: {row[3]}")
+
     cur.close()
     conn.close()
+    input("\nTekan Enter untuk kembali ke menu...")
 
 # ======== Menu Menu ===========
 def menu_admin(admin):
@@ -605,7 +625,6 @@ def main():
                 elif pilih == 2:
                     admin = login_admin()
                     if admin:
-
                         menu_admin(admin)
                 else:
                     print("Tidak ada pilihan")
