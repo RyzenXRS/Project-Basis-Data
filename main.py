@@ -175,12 +175,17 @@ def lihat_sampah():
     cur = conn.cursor()
     cur.execute("SELECT s.id_sampah_organik, s.jenis_sampah, s.harga_per_kg, u.nama_user FROM sampah_organik s JOIN users u ON s.id_supplier = u.id_user")
     hasil = cur.fetchall()
-    print("\n Daftar Sampah Organik : ")
-    
-    for row in hasil :
-        print(f"ID: {row[0]}, Jenis: {row[1]}, Harga/kg: {row[2]}, Supplier: {row[3]}")
+
+    print("\nDaftar Sampah Organik:")
+    if not hasil:
+        print("Belum ada sampah organik tersedia.")
+    else:
+        for row in hasil:
+            print(f"ID: {row[0]}, Jenis: {row[1]}, Harga/kg: {row[2]}, Supplier: {row[3]}")
+
     cur.close()
     conn.close()
+    input("\nTekan Enter untuk kembali ke menu...")
         
 def lihat_produk_maggot():
     conn = connect()
@@ -188,10 +193,16 @@ def lihat_produk_maggot():
     cur.execute("SELECT m.id_maggot, m.jenis_maggot, m.harga_per_kg, u.nama_user FROM maggot m JOIN users u ON m.id_pembudidaya = u.id_user")
     hasil = cur.fetchall()
 
-    for row in hasil:
-        print(f"ID: {row[0]}, Jenis: {row[1]}, Harga/kg: {row[2]}, Pembudidaya: {row[3]}")
+    print("\nDaftar Produk Maggot:")
+    if not hasil:
+        print("Belum ada produk maggot tersedia.")
+    else:
+        for row in hasil:
+            print(f"ID: {row[0]}, Jenis: {row[1]}, Harga/kg: {row[2]}, Pembudidaya: {row[3]}")
+
     cur.close()
     conn.close()
+    input("\nTekan Enter untuk kembali ke menu...")
 
 # ======== Pemebudidaya Things ===========
 def tambah_stok_maggot(id_user):
