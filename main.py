@@ -154,29 +154,21 @@ def pengguna_online():
     print("[2] Supplier")
     pilihan = input("Pilih Role [1/2]: ")
 
-    if pilihan == "1":
-        role = 'pembudidaya'
-    elif pilihan == "2":
-        role = 'supplier'
-    else:
+    if pilihan not in ['1', '2']:
         print("Pilihan tidak valid.")
-        cur.close()
-        conn.close()
         return
-
-    cur.execute("""
-        SELECT id_user, nama_user, email, role, last_activity
-        FROM users
-        WHERE role = %s
-    """, (role,))
+    
+    role = 'pembudidaya' if pilihan == '1' else 'supplier'
+    cur.execute("SELECT id_user, nama_user, email, role, last_activity FROM users WHERE role = %s", (role,))
     hasil = cur.fetchall()
 
     print(f"\nDaftar {role.capitalize()}:")
     for row in hasil:
-        print(f"- ID: {row[0]}, Nama: {row[1]}, Email: {row[2]}, Last Activity: {row[4]}")
-    
+        print(f"- ID: {row[0]}, Nama: {row[1]}, Email: {row[2]}, Login Terakhir Pada: {row[4]}")
+
     cur.close()
     conn.close()
+    input("\nTekan Enter untuk kembali...")
 
 def lihat_sampah():
     conn = connect()
@@ -256,11 +248,18 @@ def lihat_stok_maggot(id_user):
     cur = conn.cursor()
     cur.execute("SELECT sm.id_stok_maggot, m.jenis_maggot, sm.jumlah_kg, sm.status FROM stok_maggot sm JOIN maggot m ON sm.id_maggot = m.id_maggot WHERE m.id_pembudidaya = %s", (id_user,))
     rows = cur.fetchall()
+    
+    clear_screen()
     print("\nStok Maggot Anda:")
-    for row in rows:
-        print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Status: {row[3]}")
+    if not rows:
+        print("Belum ada stok maggot.")
+    else:
+        for row in rows:
+            print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Status: {row[3]}")
+    
     cur.close()
     conn.close()
+    input("\nTekan Enter untuk kembali ke menu...")
 
 def tambah_stok_sampah(id_user):
     conn = connect()
@@ -280,11 +279,17 @@ def lihat_stok_sampah(id_user):
     cur = conn.cursor()
     cur.execute("SELECT ss.id_stok_sampah, so.jenis_sampah, ss.jumlah_kg, ss.status FROM stok_sampah_organik ss JOIN sampah_organik so ON ss.id_sampah_organik = so.id_sampah_organik WHERE so.id_supplier = %s", (id_user,))
     rows = cur.fetchall()
+
     print("\nStok Sampah Anda:")
-    for row in rows:
-        print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Status: {row[3]}")
+    if not rows:
+        print("Belum ada stok sampah.")
+    else:
+        for row in rows:
+            print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Status: {row[3]}")
+
     cur.close()
     conn.close()
+    input("\nTekan Enter untuk kembali ke menu...")
 
 def beli_sampah_organik(id_user):
     conn = connect()
@@ -329,22 +334,34 @@ def riwayat_transaksi_pembelian(id_user):
     cur = conn.cursor()
     cur.execute("SELECT t.id_transaksi_sampah, so.jenis_sampah, t.jumlah_kg, t.deskripsi FROM transaksi_sampah_organik t JOIN sampah_organik so ON t.id_sampah_organik = so.id_sampah_organik WHERE t.id_pembeli = %s AND t.status = 'diproses'", (id_user,))
     rows = cur.fetchall()
+
     print("\nRiwayat Pembelian Sampah:")
-    for row in rows:
-        print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Catatan: {row[3]}")
+    if not rows:
+        print("Belum ada riwayat pembelian.")
+    else:
+        for row in rows:
+            print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Catatan: {row[3]}")
+
     cur.close()
     conn.close()
+    input("\nTekan Enter untuk kembali ke menu...")
 
 def riwayat_transaksi_penjualan(id_user):
     conn = connect()
     cur = conn.cursor()
     cur.execute("SELECT t.id_transaksi_maggot, m.jenis_maggot, t.jumlah_kg, t.deskripsi FROM transaksi_maggot t JOIN maggot m ON t.id_maggot = m.id_maggot WHERE m.id_pembudidaya = %s AND t.status = 'diproses'", (id_user,))
     rows = cur.fetchall()
+
     print("\nRiwayat Penjualan Maggot:")
-    for row in rows:
-        print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Catatan: {row[3]}")
+    if not rows:
+        print("Belum ada riwayat penjualan.")
+    else:
+        for row in rows:
+            print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Catatan: {row[3]}")
+
     cur.close()
     conn.close()
+    input("\nTekan Enter untuk kembali ke menu...")
 
 # ======== Supplier Things ===========
 def tambah_stok(id_user):
@@ -574,7 +591,6 @@ def main():
                             menu_pembudidaya(id_user=user['id_user'])
                         elif user['role'] == 'supplier':
                             menu_supplier(id_user=user['id_user'])
-                        return
                 elif pilih == 2:
                     admin = login_admin()
                     if admin:
