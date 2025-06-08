@@ -149,26 +149,57 @@ def login_user():
 def pengguna_online():
     conn = connect()
     cur = conn.cursor()
-    print("=== Cek Pengguna Berdasarkan Role ===")
+
+    clear_screen()
+    print("=== Cek Pengguna ===")
     print("[1] Pembudidaya")
     print("[2] Supplier")
-    pilihan = input("Pilih Role [1/2]: ")
+    print("[3] Semua User")
+    pilihan = input("Pilih kategori [1/2/3]: ")
 
-    if pilihan not in ['1', '2']:
+    if pilihan not in ['1', '2', '3']:
         print("Pilihan tidak valid.")
+        cur.close()
+        conn.close()
+        input("\nTekan Enter untuk kembali...")
         return
-    
-    role = 'pembudidaya' if pilihan == '1' else 'supplier'
-    cur.execute("SELECT id_user, nama_user, email, role, last_activity FROM users WHERE role = %s", (role,))
+
+    print("\nDaftar User : ")
+
+    if pilihan == '1':
+        cur.execute("""
+            SELECT id_user, nama_user, email, role, last_activity 
+            FROM users WHERE role = 'pembudidaya'
+        """)
+    elif pilihan == '2':
+        cur.execute("""
+            SELECT id_user, nama_user, email, role, last_activity 
+            FROM users WHERE role = 'supplier'
+        """)
+    elif pilihan == '3':
+        cur.execute("""
+            SELECT id_user, nama_user, email, role, last_activity 
+            FROM users ORDER BY role
+        """)
+
     hasil = cur.fetchall()
 
-    print(f"\nDaftar {role.capitalize()}:")
-    for row in hasil:
-        print(f"- ID: {row[0]}, Nama: {row[1]}, Email: {row[2]}, Terakhir Login Pada: {row[4]}")
+    if not hasil:
+        print("Belum ada pengguna terdaftar.")
+    else:
+        roles = ""
+        for row in hasil:
+            role = row[3]
+            if role != roles:
+                print(f"--- {role.capitalize()} ---")
+                roles = role
+
+            last_login = row[4].strftime("%Y-%m-%d %H:%M:%S") if row[4] else "Belum pernah login"
+            print(f"ID: {row[0]}, Nama: {row[1]}, Email: {row[2]}, Login Terakhir: {last_login}")
 
     cur.close()
     conn.close()
-    input("\nTekan Enter untuk kembali...")
+    input("\nTekan Enter untuk kembali ke menu...")
 
 def lihat_sampah():
     conn = connect()
