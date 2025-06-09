@@ -411,16 +411,86 @@ def beli_sampah_organik(id_user):
 def jual_maggot(id_user):
     conn = connect()
     cur = conn.cursor()
+
+    print("\n--- Jual Maggot ---")
+    while True:
+        id_maggot = input("ID Maggot: ").strip()
+        if not id_maggot:
+            print("ID Maggot tidak boleh kosong.")
+            continue
+
+        cur.execute("SELECT 1 FROM maggot WHERE id_maggot = %s AND id_pembudidaya = %s", (id_maggot, id_user))
+        if cur.fetchone():
+            break
+        else:
+            print("ID Maggot tidak ditemukan atau bukan milik Anda.")
+    while True:
+        id_pembeli = input("ID Pembeli: ").strip()
+        if not id_pembeli:
+            print("ID Pembeli tidak boleh kosong.")
+            continue
+
+        cur.execute("SELECT 1 FROM users WHERE id_user = %s AND role IN ('supplier', 'pembudidaya')", (id_pembeli,))
+        if cur.fetchone():
+            break
+        else:
+            print("Pembeli tidak ditemukan.")
+    while True:
+        jumlah_input = input("Jumlah (kg): ").strip()
+        try:
+            jumlah = int(jumlah_input)
+            if jumlah <= 0:
+                print("Jumlah harus lebih besar dari nol.")
+                continue
+            break
+        except ValueError:
+            print("Input harus berupa angka.")
+
+    deskripsi = input("Keterangan (opsional): ").strip()
+
+    # Cek stok tersedia
+    cur.execute("SELECT jumlah_kg, id_stok_maggot FROM stok_maggot WHERE id_maggot = %s AND status = 'tersedia'", (id_maggot,))
+    stok_row = cur.fetchone()
+
+    if stok_row:
+        stok_tersedia, id_stok = stok_row
+        if stok_tersedia < jumlah:
+            print(f"Stok tidak mencukupi. Hanya tersisa {stok_tersedia} kg.")
+            cur.close()
+            conn.close()
+            input("\nTekan Enter untuk kembali...")
+            return
+    else:
+        print("Tidak ada stok tersedia untuk maggot ini.")
+        cur.close()
+        conn.close()
+        input("\nTekan Enter untuk kembali...")
+        return
+
     id_transaksi = generate_id("TM", "transaksi_maggot", "id_transaksi_maggot")
-    id_maggot = input("ID Maggot: ")
-    jumlah = int(input("Jumlah (kg): "))
-    pembeli = input("ID Pembeli: ")
-    deskripsi = input("Keterangan: ")
-    cur.execute("INSERT INTO transaksi_maggot (id_transaksi_maggot, id_pembeli, id_maggot, jumlah_kg, deskripsi, status) VALUES (%s, %s, %s, %s, %s, 'diproses')", (id_transaksi, pembeli, id_maggot, jumlah, deskripsi))
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("Penjualan maggot tercatat.")
+    try:
+        # Simpan transaksi
+        cur.execute("""
+            INSERT INTO transaksi_maggot (
+                id_transaksi_maggot, id_pembeli, id_maggot, jumlah_kg, deskripsi, status
+            ) VALUES (%s, %s, %s, %s, %s, 'diproses')
+        """, (id_transaksi, id_pembeli, id_maggot, jumlah, deskripsi))
+
+        # Kurangi stok
+        sisa_stok = stok_tersedia - jumlah
+        if sisa_stok > 0:
+            cur.execute("UPDATE stok_maggot SET jumlah_kg = %s WHERE id_stok_maggot = %s", (sisa_stok, id_stok))
+        else:
+            cur.execute("DELETE FROM stok_maggot WHERE id_stok_maggot = %s", (id_stok,))
+
+        conn.commit()
+        print("Penjualan maggot berhasil dicatat dan stok diperbarui.")
+    except Exception as e:
+        print(f"Gagal mencatat penjualan: {e}")
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
 
 def catat_harian(id_user):
     conn = connect()
@@ -486,7 +556,7 @@ def lihat_stok(id_user):
     cur = conn.cursor()
     cur.execute("SELECT ss.id_stok_sampah, so.jenis_sampah, ss.jumlah_kg, ss.status FROM stok_sampah_organik ss JOIN sampah_organik so ON ss.id_sampah_organik = so.id_sampah_organik WHERE so.id_supplier = %s", (id_user,))
     rows = cur.fetchall()
-    print("Stok Sampah Anda:")
+    print("Stok Sampah Anda :")
     for row in rows:
         print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Status: {row[3]}")
     cur.close()
