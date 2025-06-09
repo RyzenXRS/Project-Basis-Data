@@ -1,6 +1,7 @@
 import psycopg2
 from psycopg2.extras import RealDictCursor
-import os 
+import os
+from tabulate import tabulate as tb
 
 def clear_screen():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -13,6 +14,7 @@ def connect():
         password="321"
     )
 
+# ========== Gen ID otomatis ===========
 def generate_id(prefix, table, id_column):
     conn = connect()
     cur = conn.cursor()
@@ -58,7 +60,7 @@ def generate_user_id(role):
     conn.close()
     return new_id
 
-
+# ========== Register ===========
 def register_pembudidaya():
     conn = connect()
     cur = conn.cursor()
@@ -313,15 +315,48 @@ def lihat_stok_maggot(id_user):
 def tambah_stok_sampah(id_user):
     conn = connect()
     cur = conn.cursor()
+
+    print("\n--- Tambah Stok Sampah ---")
+    while True:
+        id_sampah = input("ID Sampah Organik: ").strip()
+        if id_sampah:
+            cur.execute("SELECT 1 FROM sampah_organik WHERE id_sampah_organik = %s AND id_supplier = %s", (id_sampah, id_user))
+            if cur.fetchone():
+                break
+            else:
+                print("ID Sampah tidak ditemukan atau bukan milik Anda.")
+        else:
+            print("ID Sampah tidak boleh kosong.")
+    while True:
+        jumlah_input = input("Jumlah (kg): ").strip()
+        try:
+            jumlah = int(jumlah_input)
+            if jumlah > 0:
+                break
+            else:
+                print("Jumlah harus lebih besar dari nol.")
+        except ValueError:
+            print("Input harus berupa angka.")
+    while True:
+        status = input("Status (tersedia/habis): ").strip().lower()
+        if status in ['tersedia', 'habis']:
+            break
+        else:
+            print("Status harus 'tersedia' atau 'habis'.")
     id_stok = generate_id("SSO", "stok_sampah_organik", "id_stok_sampah")
-    id_sampah = input("ID Sampah Organik: ")
-    jumlah = int(input("Jumlah (kg): "))
-    status = input("Status (tersedia/habis): ")
-    cur.execute("INSERT INTO stok_sampah_organik (id_stok_sampah, id_sampah_organik, jumlah_kg, status) VALUES (%s, %s, %s, %s)", (id_stok, id_sampah, jumlah, status))
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("Stok sampah ditambahkan.")
+
+    try:
+        cur.execute("""
+            INSERT INTO stok_sampah_organik (id_stok_sampah, id_sampah_organik, jumlah_kg, status)
+            VALUES (%s, %s, %s, %s)
+        """, (id_stok, id_sampah, jumlah, status))
+        conn.commit()
+        print("Stok sampah berhasil ditambahkan.")
+    except Exception as e:
+        print(f"Gagal menambahkan stok: {e}")
+    finally:
+        cur.close()
+        conn.close()
 
 def lihat_stok_sampah(id_user):
     conn = connect()
@@ -344,14 +379,34 @@ def beli_sampah_organik(id_user):
     conn = connect()
     cur = conn.cursor()
     id_transaksi = generate_id("TS", "transaksi_sampah_organik", "id_transaksi_sampah")
-    id_sampah = input("ID Sampah: ")
-    jumlah = int(input("Jumlah (kg): "))
+
+    while True:
+        id_sampah = input("ID Sampah: ").strip()
+        if id_sampah:
+            cur.execute("SELECT 1 FROM sampah_organik WHERE id_sampah_organik = %s", (id_sampah,))
+            if cur.fetchone():
+                break
+            print("ID Sampah tidak ditemukan.")
+            continue
+        print("ID Sampah tidak boleh kosong.")
+
+    while True:
+        try:
+            jumlah = int(input("Jumlah (kg): "))
+            if jumlah > 0:
+                break
+            print("Jumlah harus lebih besar dari 0.")
+        except ValueError:
+            print("Input harus berupa angka.")
+
     deskripsi = input("Keterangan: ")
-    cur.execute("INSERT INTO transaksi_sampah_organik (id_transaksi_sampah, id_pembeli, id_sampah_organik, jumlah_kg, deskripsi, status) VALUES (%s, %s, %s, %s, %s, 'diproses')", (id_transaksi, id_user, id_sampah, jumlah, deskripsi))
+
+    cur.execute("INSERT INTO transaksi_sampah_organik (...) VALUES (...)", ...)
     conn.commit()
+    print("Pembelian berhasil dicatat.")
     cur.close()
     conn.close()
-    print("Pembelian sampah tercatat.")
+    input("\nTekan Enter untuk kembali...")
 
 def jual_maggot(id_user):
     conn = connect()
@@ -442,23 +497,30 @@ def terima_pesanan(id_user):
     cur = conn.cursor()
     cur.execute("SELECT ts.id_transaksi_sampah, u.nama_user, so.jenis_sampah, ts.jumlah_kg, ts.status FROM transaksi_sampah_organik ts JOIN sampah_organik so ON ts.id_sampah_organik = so.id_sampah_organik JOIN users u ON ts.id_pembeli = u.id_user WHERE so.id_supplier = %s AND ts.status = 'diproses'", (id_user,))
     rows = cur.fetchall()
-
-    print("\nPesanan Masuk:")
+    
     if not rows:
         print("Tidak ada pesanan masuk.")
-    else:
-        for row in rows:
-            print(f"ID: {row[0]}, Pembeli: {row[1]}, Jenis: {row[2]}, Jumlah: {row[3]}kg, Status: {row[4]}")
+        cur.close()
+        conn.close()
+        input("\nTekan Enter untuk kembali...")
+        return
 
-    id_pilih = input("Masukkan ID transaksi yang ingin diterima (atau tekan Enter untuk batal): ")
-    if id_pilih.strip():
-        cur.execute("UPDATE transaksi_sampah_organik SET status = 'dikirim' WHERE id_transaksi_sampah = %s", (id_pilih,))
-        conn.commit()
-        print("Transaksi diperbarui menjadi dikirim.")
+    print("\nPesanan Masuk:")
+    for row in rows:
+        print(f"ID: {row[0]}, Pembeli: {row[1]}, Jenis: {row[2]}, Jumlah: {row[3]}kg, Status: {row[4]}")
 
+    while True:
+        id_pilih = input("Masukkan ID transaksi yang ingin diterima: ").strip()
+        if id_pilih:
+            break
+        print("ID transaksi tidak boleh kosong.")
+
+    cur.execute("UPDATE transaksi_sampah_organik SET status = 'dikirim' WHERE id_transaksi_sampah = %s", (id_pilih,))
+    conn.commit()
+    print("Transaksi diperbarui menjadi dikirim.")
     cur.close()
     conn.close()
-    input("\nTekan Enter untuk kembali ke menu...")
+    input("\nTekan Enter untuk kembali...")
 
 def beli_maggot(id_user):
         conn = connect()
@@ -682,6 +744,3 @@ def main():
         input("\nTekan Enter untuk kembali...")
 
 main()
-
-
-
