@@ -166,19 +166,21 @@ def login_admin():
     try:
         email = input("Email : ").strip()
         password = input("Password : ").strip()
+
         if not email or not password:
             print("Email dan Password tidak boleh kosong.")
             return None
+
         conn = connect()
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Eksekusi query
         cur.execute("SELECT * FROM users WHERE email = %s AND password = %s", (email, password))
         user = cur.fetchone()
 
-        # Cek apakah user ditemukan
         if user and user['role'] == 'admin':
-            print("Login berhasil")
+            cur.execute("UPDATE users SET last_activity = NOW() WHERE email = %s", (email,))
+            conn.commit()
+            print(f"Login berhasil sebagai admin: {user['nama_user']}")
             return user
         else:
             print("Email atau Password salah atau bukan akun admin.")
@@ -186,6 +188,8 @@ def login_admin():
 
     except psycopg2.DatabaseError as e:
         print(f"Terjadi kesalahan pada database: {e}")
+        if conn:
+            conn.rollback()
         return None
 
     except Exception as e:
@@ -208,24 +212,20 @@ def login_user():
         if not email or not password:
             print("Email dan Password tidak boleh kosong.")
             return None
+
         conn = connect()
         cur = conn.cursor(cursor_factory=RealDictCursor)
 
-        # Eksekusi query
-        cur.execute("""
-            SELECT * FROM users WHERE email = %s AND password = %s
-        """, (email, password))
+        cur.execute("SELECT * FROM users WHERE email = %s AND password = %s", (email, password))
         user = cur.fetchone()
 
-        if user:
-            cur.execute("""
-                UPDATE users SET last_activity = NOW() WHERE email = %s
-            """, (email,))
+        if user and user['role'] in ['pembudidaya', 'supplier']:
+            cur.execute("UPDATE users SET last_activity = NOW() WHERE email = %s", (email,))
             conn.commit()
-            print(f"\nLogin berhasil! Selamat datang {user['nama_user']}, kamu login sebagai {user['role']}.\n")
+            print(f"Login berhasil sebagai {user['role'].capitalize()}: {user['nama_user']}")
             return user
         else:
-            print("Email atau Password salah!")
+            print("Email atau Password salah atau bukan akun pembudidaya/supplier.")
             return None
 
     except psycopg2.DatabaseError as e:
@@ -1288,7 +1288,7 @@ def main():
                 print("Register sebagai  ")
                 print("[1] Pembudidaya")
                 print("[2] Supplier")
-                reg_pilihan = input("Pilih Register : ").strip()
+                reg_pilihan = input("Pilih Register [1/2] : ").strip()
                 if reg_pilihan == '1':
                     register_pembudidaya()
                 elif reg_pilihan == '2':
