@@ -65,14 +65,12 @@ def register_pembudidaya():
     conn = None
     cur = None
     try:
-        # Input user
+        clear_screen()
         nama = input("Masukkan nama : ").strip()
         email = input("Masukkan Email : ").strip()
         nomer_telepon = input("Masukkan Nomer Telepon : ").strip()
         password = input("Masukkan password : ").strip()
         deskripsi = input("Alamat : ").strip()
-
-        # Validasi input tidak boleh kosong
         if not all([nama, email, nomer_telepon, password, deskripsi]):
             print("Semua field harus diisi!")
             return
@@ -114,66 +112,137 @@ def register_pembudidaya():
             conn.close()
 
 def register_supplier():
-    conn = connect()
-    cur = conn.cursor()
-    nama = input("Masukkan nama : ")
-    email = input("Masukkan Email : ")
-    nomer_telepon = input("Masukkan Nomer Telepon : ")
-    password = input("Masukkan password : ")
-    deskripsi = input("Alamat : ")
-    role = "supplier"
-    id_user = generate_user_id(role)
+    conn = None
+    cur = None
+    try:
+        clear_screen()
+        nama = input("Masukkan nama : ").strip()
+        email = input("Masukkan Email : ").strip()
+        nomer_telepon = input("Masukkan Nomer Telepon : ").strip()
+        password = input("Masukkan password : ").strip()
+        deskripsi = input("Alamat : ").strip()
 
-    cur.execute("""
-        INSERT INTO users (id_user, nama_user, alamat, no_telp, email, password, role)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (id_user, nama, deskripsi, nomer_telepon, email, password, role))
+        # Validasi input tidak boleh kosong
+        if not all([nama, email, nomer_telepon, password, deskripsi]):
+            print("Semua field harus diisi!")
+            return
 
-    conn.commit()
-    cur.close()
-    conn.close()
-    print(f"User {nama} berhasil didaftarkan dengan ID {id_user}")
-    return
+        role = "supplier"
+        id_user = generate_user_id(role)
+        conn = connect()
+        cur = conn.cursor()
+        cur.execute("SELECT 1 FROM users WHERE email = %s", (email,))
+        if cur.fetchone():
+            print("Email sudah terdaftar. Gunakan email lain.")
+            return
 
+        cur.execute("""
+            INSERT INTO users (id_user, nama_user, alamat, no_telp, email, password, role)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (id_user, nama, deskripsi, nomer_telepon, email, password, role))
+
+        conn.commit()
+        print(f"User {nama} berhasil didaftarkan dengan ID {id_user}")
+
+    except psycopg2.DatabaseError as e:
+        if conn:
+            conn.rollback()
+        print(f"Terjadi kesalahan pada database: {e}")
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error umum: {e}")
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+            
 def login_admin():
-    conn = connect()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    email = input("Email : ")
-    password = input("Password : ")
-    cur.execute("""SELECT * FROM users WHERE email = %s AND password = %s""", (email,password))
-    user = cur.fetchone()
-    cur.close()
-    conn.close()
+    conn = None
+    cur = None
+    try:
+        email = input("Email : ").strip()
+        password = input("Password : ").strip()
+        if not email or not password:
+            print("Email dan Password tidak boleh kosong.")
+            return None
+        conn = connect()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    if user:
-        print("Login berhasil")
-        return user
-    else: 
-        print("Email atau Password salah !")
+        # Eksekusi query
+        cur.execute("SELECT * FROM users WHERE email = %s AND password = %s", (email, password))
+        user = cur.fetchone()
+
+        # Cek apakah user ditemukan
+        if user and user['role'] == 'admin':
+            print("Login berhasil")
+            return user
+        else:
+            print("Email atau Password salah atau bukan akun admin.")
+            return None
+
+    except psycopg2.DatabaseError as e:
+        print(f"Terjadi kesalahan pada database: {e}")
+        return None
+
+    except Exception as e:
+        print(f"Error umum: {e}")
+        return None
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 def login_user():
-    conn = connect()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    email = input("Email : ")
-    password = input("Password : ")
+    conn = None
+    cur = None
+    try:
+        email = input("Email : ").strip()
+        password = input("Password : ").strip()
 
-    cur.execute("""
-        SELECT * FROM users WHERE email = %s AND password = %s
-    """, (email, password))
-    user = cur.fetchone()
+        if not email or not password:
+            print("Email dan Password tidak boleh kosong.")
+            return None
+        conn = connect()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
 
-    if user:
-        cur.execute("""UPDATE users SET last_activity = NOW() WHERE email = %s""", (email,))
-        conn.commit()
-        print(f"\nLogin berhasil! Selamat datang {user['nama_user']}, kamu login sebagai {user['role']}.\n")
-        cur.close()
-        conn.close()
-        return user
-    else:
-        print("Email atau Password salah!")
-        cur.close()
-        conn.close()
+        # Eksekusi query
+        cur.execute("""
+            SELECT * FROM users WHERE email = %s AND password = %s
+        """, (email, password))
+        user = cur.fetchone()
+
+        if user:
+            cur.execute("""
+                UPDATE users SET last_activity = NOW() WHERE email = %s
+            """, (email,))
+            conn.commit()
+            print(f"\nLogin berhasil! Selamat datang {user['nama_user']}, kamu login sebagai {user['role']}.\n")
+            return user
+        else:
+            print("Email atau Password salah!")
+            return None
+
+    except psycopg2.DatabaseError as e:
+        print(f"Terjadi kesalahan pada database: {e}")
+        if conn:
+            conn.rollback()
         return None
+
+    except Exception as e:
+        print(f"Error umum: {e}")
+        return None
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
     
 def profile(id_user):
     conn = connect()
@@ -246,7 +315,7 @@ def edit_profile(id_user):
         ["Alamat", user_data['alamat']]
     ]
     print(tb(table, headers=headers, tablefmt="grid"))
-    print()  # Spasi baru
+    print()  
 
     # Input baru untuk setiap field
     nama_baru = input(f"Nama (Saat ini: {user_data['nama_user']}): ").strip() or user_data['nama_user']
@@ -987,7 +1056,7 @@ def riwayat_penjualan(id_user):
     else:
         headers = ["ID Transaksi", "Jenis Sampah", "Jumlah (kg)", "Catatan"]
         table_data = [[row[0], row[1], f"{row[2]} kg", row[3]] for row in rows]
-        print(tb(table_data, headers=headers, tablefmt="grid"))
+        print(tb(table_data, headers=headers, tablefmt="double_grid"))
     
     cur.close()
     conn.close()
