@@ -62,27 +62,56 @@ def generate_user_id(role):
 
 # ========== Register ===========
 def register_pembudidaya():
-    conn = connect()
-    cur = conn.cursor()
-    nama = input("Masukkan nama : ")
-    email = input("Masukkan Email : ")
-    nomer_telepon = input("Masukkan Nomer Telepon : ")
-    password = input("Masukkan password : ")
-    deskripsi = input("Alamat : ")
-    role = "pembudidaya"
-    id_user = generate_user_id(role)
+    conn = None
+    cur = None
+    try:
+        # Input user
+        nama = input("Masukkan nama : ").strip()
+        email = input("Masukkan Email : ").strip()
+        nomer_telepon = input("Masukkan Nomer Telepon : ").strip()
+        password = input("Masukkan password : ").strip()
+        deskripsi = input("Alamat : ").strip()
 
-    cur.execute("""
-        INSERT INTO users (id_user, nama_user, alamat, no_telp, email, password, role)
-        VALUES (%s, %s, %s, %s, %s, %s, %s)
-    """, (id_user, nama, deskripsi, nomer_telepon, email, password, role))
+        # Validasi input tidak boleh kosong
+        if not all([nama, email, nomer_telepon, password, deskripsi]):
+            print("Semua field harus diisi!")
+            return
 
-    conn.commit()
-    cur.close()
-    conn.close()
-    print(f"User {nama} berhasil didaftarkan dengan ID {id_user}")
-    return
+        role = "pembudidaya"
+        id_user = generate_user_id(role)
+        conn = connect()
+        cur = conn.cursor()
 
+        # Cek apakah email sudah terdaftar
+        cur.execute("SELECT 1 FROM users WHERE email = %s", (email,))
+        if cur.fetchone():
+            print("Email sudah terdaftar. Gunakan email lain.")
+            return
+
+        # Eksekusi query insert
+        cur.execute("""
+            INSERT INTO users (id_user, nama_user, alamat, no_telp, email, password, role)
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """, (id_user, nama, deskripsi, nomer_telepon, email, password, role))
+
+        conn.commit()
+        print(f"User {nama} berhasil didaftarkan dengan ID {id_user}")
+
+    except psycopg2.DatabaseError as e:
+        if conn:
+            conn.rollback()
+        print(f"Terjadi kesalahan pada database: {e}")
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error umum: {e}")
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 def register_supplier():
     conn = connect()
@@ -162,19 +191,20 @@ def profile(id_user):
         input("\nTekan Enter untuk kembali...")
         return
 
-    # Tampilkan profil pengguna
-    print(f"""
-=== Profil ===
+    # Tampilkan profil pengguna dalam format tabulate
+    print("\n=== Profil Pengguna ===\n")
+    headers = ["Field", "Data"]
+    table = [
+        ["Nama", user_data['nama_user']],
+        ["Email", user_data['email']],
+        ["Nomor Telepon", user_data['no_telp']],
+        ["Alamat", user_data['alamat']]
+    ]
+    print(tb(table, headers=headers, tablefmt="double_grid"))
 
-Nama: {user_data['nama_user']}
-Email: {user_data['email']}
-Nomor Telepon: {user_data['no_telp']}
-Alamat: {user_data['alamat']}
-
-""")
-    # Opsi Edit Profil
+    # Menu pilihan
     while True:
-        print("[1] Edit Profil")
+        print("\n[1] Edit Profil")
         print("[2] Kembali ke Menu Utama")
         pilihan = input("Masukkan pilihan: ").strip()
         match pilihan:
@@ -191,7 +221,6 @@ Alamat: {user_data['alamat']}
 def edit_profile(id_user):
     conn = connect()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    clear_screen()
 
     # Ambil data profil pengguna berdasarkan id_user
     cur.execute("SELECT nama_user, email, no_telp, alamat FROM users WHERE id_user = %s", (id_user,))
@@ -204,16 +233,20 @@ def edit_profile(id_user):
         input("\nTekan Enter untuk kembali...")
         return
 
-    # Tampilkan profil pengguna 
-    print(f"""
-=== Edit Profil ===
-Kosongkan kolom jika tidak ingin mengubahnya.
+    clear_screen()
+    print("=== Edit Profil ===")
+    print("Kosongkan kolom jika tidak ingin mengubahnya.\n")
 
-Nama (Saat ini: {user_data['nama_user']}): 
-Email (Saat ini: {user_data['email']}): 
-Nomor Telepon (Saat ini: {user_data['no_telp']}): 
-Alamat (Saat ini: {user_data['alamat']}): 
-""")
+    # Tampilkan data saat ini dengan tabulate
+    headers = ["Field", "Data Saat Ini"]
+    table = [
+        ["Nama", user_data['nama_user']],
+        ["Email", user_data['email']],
+        ["Nomor Telepon", user_data['no_telp']],
+        ["Alamat", user_data['alamat']]
+    ]
+    print(tb(table, headers=headers, tablefmt="grid"))
+    print()  # Spasi baru
 
     # Input baru untuk setiap field
     nama_baru = input(f"Nama (Saat ini: {user_data['nama_user']}): ").strip() or user_data['nama_user']
@@ -229,10 +262,11 @@ Alamat (Saat ini: {user_data['alamat']}):
     """, (nama_baru, email_baru, no_telp_baru, alamat_baru, id_user))
     conn.commit()
 
-    print("Profil berhasil diperbarui!")
+    print("\nProfil berhasil diperbarui!")
     cur.close()
     conn.close()
-    input("\nTekan Enter untuk kembali...")
+    input("\nTekan Enter untuk kembali ke menu profil...")
+    profile(id_user)  # Kembali ke halaman profil
 
 # ======== Admin Things ===========
 def pengguna_online():
@@ -319,19 +353,70 @@ def lihat_produk_maggot():
     cur = conn.cursor()
     cur.execute("SELECT m.id_maggot, m.jenis_maggot, m.harga_per_kg, u.nama_user FROM maggot m JOIN users u ON m.id_pembudidaya = u.id_user")
     hasil = cur.fetchall()
-
+    
     print("\nDaftar Produk Maggot:")
     if not hasil:
         print("Belum ada produk maggot tersedia.")
     else:
-        for row in hasil:
-            print(f"ID: {row[0]}, Jenis: {row[1]}, Harga/kg: {row[2]}, Pembudidaya: {row[3]}")
-
+        headers = ["ID", "Jenis", "Harga/kg", "Pembudidaya"]
+        table_data = [[row[0], row[1], f"Rp{row[2]}", row[3]] for row in hasil]
+        print(tb(table_data, headers=headers, tablefmt="double_grid"))
+    
     cur.close()
     conn.close()
     input("\nTekan Enter untuk kembali ke menu...")
 
 # ======== Pemebudidaya Things ===========
+def lihat_stok_sampah(id_user):
+    conn = connect()
+    cur = conn.cursor()
+    cur.execute("SELECT ss.id_stok_sampah, so.jenis_sampah, ss.jumlah_kg, ss.status FROM stok_sampah_organik ss JOIN sampah_organik so ON ss.id_sampah_organik = so.id_sampah_organik WHERE so.id_supplier = %s", (id_user,))
+    rows = cur.fetchall()
+    
+    print("\nStok Sampah Anda:")
+    if not rows:
+        print("Belum ada stok sampah.")
+    else:
+        headers = ["ID Stok", "Jenis", "Jumlah (kg)", "Status"]
+        table_data = [[row[0], row[1], row[2], row[3]] for row in rows]
+        print(tb(table_data, headers=headers, tablefmt="double_grid"))
+        
+    cur.close()
+    conn.close()
+    input("\nTekan Enter untuk kembali ke menu...")
+
+def lihat_stok_sampah_dibeli():
+    conn = connect()
+    cur = conn.cursor()
+
+    clear_screen()
+    print("=== Stok Sampah Organik Tersedia ===\n")
+
+    cur.execute("""
+        SELECT 
+            ss.id_stok_sampah,
+            so.jenis_sampah,
+            ss.jumlah_kg,
+            u.nama_user AS supplier,
+            so.harga_per_kg
+        FROM stok_sampah_organik ss
+        JOIN sampah_organik so ON ss.id_sampah_organik = so.id_sampah_organik
+        JOIN users u ON so.id_supplier = u.id_user
+        WHERE ss.status = 'tersedia' AND ss.jumlah_kg > 0
+    """)
+    rows = cur.fetchall()
+
+    if not rows:
+        print("Belum ada stok sampah yang tersedia untuk dibeli.")
+    else:
+        headers = ["ID Stok", "Jenis Sampah", "Jumlah (kg)", "Supplier", "Harga/kg"]
+        table_data = [[row[0], row[1], row[2], row[3], f"Rp{row[4]}"] for row in rows]
+        print(tb(table_data, headers=headers, tablefmt="double_grid"))
+
+    cur.close()
+    conn.close()
+    input("\nTekan Enter untuk kembali...")
+    
 def tambah_stok_maggot(id_user):
     conn = connect()
     cur = conn.cursor()
@@ -452,55 +537,141 @@ def tambah_stok_sampah(id_user):
         cur.close()
         conn.close()
 
-def lihat_stok_sampah(id_user):
+def lihat_stok_maggot(id_user):
     conn = connect()
     cur = conn.cursor()
-    cur.execute("SELECT ss.id_stok_sampah, so.jenis_sampah, ss.jumlah_kg, ss.status FROM stok_sampah_organik ss JOIN sampah_organik so ON ss.id_sampah_organik = so.id_sampah_organik WHERE so.id_supplier = %s", (id_user,))
+    cur.execute("SELECT sm.id_stok_maggot, m.jenis_maggot, sm.jumlah_kg, sm.status FROM stok_maggot sm JOIN maggot m ON sm.id_maggot = m.id_maggot WHERE m.id_pembudidaya = %s", (id_user,))
     rows = cur.fetchall()
-
-    print("\nStok Sampah Anda:")
+    clear_screen()
+    
+    print("\nStok Maggot Anda:")
     if not rows:
-        print("Belum ada stok sampah.")
+        print("Belum ada stok maggot.")
     else:
-        for row in rows:
-            print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Status: {row[3]}")
-
+        headers = ["ID Stok", "Jenis", "Jumlah (kg)", "Status"]
+        table_data = [[row[0], row[1], row[2], row[3]] for row in rows]
+        print(tb(table_data, headers=headers, tablefmt="double_grid"))
+        
     cur.close()
     conn.close()
     input("\nTekan Enter untuk kembali ke menu...")
 
 def beli_sampah_organik(id_user):
-    conn = connect()
-    cur = conn.cursor()
-    id_transaksi = generate_id("TS", "transaksi_sampah_organik", "id_transaksi_sampah")
+    conn = None
+    cur = None
 
-    while True:
-        id_sampah = input("ID Sampah: ").strip()
-        if id_sampah:
-            cur.execute("SELECT 1 FROM sampah_organik WHERE id_sampah_organik = %s", (id_sampah,))
-            if cur.fetchone():
+    try:
+        # Koneksi database
+        conn = connect()
+        cur = conn.cursor()
+
+        clear_screen()
+        print("=== Daftar Sampah Organik Tersedia ===\n")
+
+        # Ambil data stok yang tersedia
+        cur.execute("""
+            SELECT 
+                ss.id_stok_sampah,
+                so.jenis_sampah,
+                ss.jumlah_kg,
+                u.nama_user AS supplier,
+                so.harga_per_kg,
+                so.id_sampah_organik
+            FROM stok_sampah_organik ss
+            JOIN sampah_organik so ON ss.id_sampah_organik = so.id_sampah_organik
+            JOIN users u ON so.id_supplier = u.id_user
+            WHERE ss.status = 'tersedia' AND ss.jumlah_kg > 0
+        """)
+        hasil = cur.fetchall()
+
+        if not hasil:
+            print("Tidak ada stok tersedia saat ini.")
+            input("\nTekan Enter untuk kembali...")
+            return
+
+        headers = ["ID Stok", "Jenis", "Jumlah (kg)", "Supplier", "Harga/kg"]
+        table_data = [[row[0], row[1], row[2], row[3], f"Rp{row[4]}"] for row in hasil]
+        print(tb(table_data, headers=headers, tablefmt="double_grid"))
+        print("\nMasukkan ID Stok untuk membeli.")
+
+        # Input ID Stok
+        while True:
+            id_stok = input("ID Stok (ketik 'batal' untuk batal): ").strip()
+            if id_stok.lower() == 'batal':
+                print("Pembelian dibatalkan.")
+                return
+            cur.execute("""
+                SELECT 
+                    ss.id_stok_sampah, 
+                    ss.jumlah_kg, 
+                    so.id_sampah_organik,
+                    so.harga_per_kg
+                FROM stok_sampah_organik ss
+                JOIN sampah_organik so ON ss.id_sampah_organik = so.id_sampah_organik
+                WHERE ss.id_stok_sampah = %s AND ss.status = 'tersedia'
+            """, (id_stok,))
+            stok = cur.fetchone()
+            if stok:
                 break
-            print("ID Sampah tidak ditemukan.")
-            continue
-        print("ID Sampah tidak boleh kosong.")
+            else:
+                print("ID Stok tidak ditemukan atau stok tidak tersedia.")
 
-    while True:
-        try:
-            jumlah = int(input("Jumlah (kg): "))
-            if jumlah > 0:
-                break
-            print("Jumlah harus lebih besar dari 0.")
-        except ValueError:
-            print("Input harus berupa angka.")
+        id_stok_sampah, jumlah_tersedia, id_sampah, harga = stok
 
-    deskripsi = input("Keterangan: ")
+        # Input Jumlah
+        while True:
+            jumlah_input = input(f"Jumlah (kg) - Stok tersedia: {jumlah_tersedia} kg (ketik 'batal' untuk batal): ").strip()
+            if jumlah_input.lower() == 'batal':
+                print("Pembelian dibatalkan.")
+                return
+            try:
+                jumlah = int(jumlah_input)
+                if 0 < jumlah <= jumlah_tersedia:
+                    break
+                else:
+                    print(f"Jumlah harus lebih besar dari 0 dan tidak melebihi {jumlah_tersedia} kg.")
+            except ValueError:
+                print("Input harus berupa angka.")
 
-    cur.execute("INSERT INTO transaksi_sampah_organik (...) VALUES (...)", ...)
-    conn.commit()
-    print("Pembelian berhasil dicatat.")
-    cur.close()
-    conn.close()
-    input("\nTekan Enter untuk kembali...")
+        deskripsi = input("Keterangan (opsional): ")
+
+        id_transaksi = generate_id("TS", "transaksi_sampah_organik", "id_transaksi_sampah")
+
+        # Eksekusi transaksi
+        cur.execute("""
+            INSERT INTO transaksi_sampah_organik (
+                id_transaksi_sampah, id_pembeli, id_sampah_organik, jumlah_kg, deskripsi, status
+            ) VALUES (%s, %s, %s, %s, %s, 'diproses')
+        """, (id_transaksi, id_user, id_sampah, jumlah, deskripsi))
+
+        # Kurangi stok
+        sisa = jumlah_tersedia - jumlah
+        if sisa > 0:
+            cur.execute("UPDATE stok_sampah_organik SET jumlah_kg = %s WHERE id_stok_sampah = %s", (sisa, id_stok_sampah))
+        else:
+            cur.execute("DELETE FROM stok_sampah_organik WHERE id_stok_sampah = %s", (id_stok_sampah,))
+
+        conn.commit()
+        total_harga = harga * jumlah
+        print(f"\nPembelian berhasil dicatat!")
+        print(f"Total Harga: Rp{total_harga}")
+
+    except psycopg2.DatabaseError as e:
+        if conn:
+            conn.rollback()
+        print(f"Terjadi kesalahan pada database: {e}")
+    
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error umum: {e}")
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+        input("\nTekan Enter untuk kembali...")
 
 def jual_maggot(id_user):
     conn = connect()
@@ -586,16 +757,6 @@ def jual_maggot(id_user):
         cur.close()
         conn.close()
 
-def catat_harian(id_user):
-    conn = connect()
-    cur = conn.cursor()
-    id_transaksi = generate_id("TS", "transaksi_sampah_organik", "id_transaksi_sampah")
-    deskripsi = input("Deskripsi kegiatan: ")
-    cur.execute("INSERT INTO transaksi_sampah_organik (id_transaksi_sampah, id_pembeli, id_sampah_organik, jumlah_kg, deskripsi, status) VALUES (%s, %s, NULL, 0, %s, 'harian')", (id_transaksi, id_user, deskripsi))
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("Catatan harian berhasil disimpan.")
 
 def riwayat_transaksi_pembelian(id_user):
     conn = connect()
@@ -619,42 +780,91 @@ def riwayat_transaksi_penjualan(id_user):
     cur = conn.cursor()
     cur.execute("SELECT t.id_transaksi_maggot, m.jenis_maggot, t.jumlah_kg, t.deskripsi FROM transaksi_maggot t JOIN maggot m ON t.id_maggot = m.id_maggot WHERE m.id_pembudidaya = %s AND t.status = 'diproses'", (id_user,))
     rows = cur.fetchall()
-
+    
     print("\nRiwayat Penjualan Maggot:")
     if not rows:
         print("Belum ada riwayat penjualan.")
     else:
-        for row in rows:
-            print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Catatan: {row[3]}")
-
+        headers = ["ID Transaksi", "Jenis", "Jumlah (kg)", "Catatan"]
+        table_data = [[row[0], row[1], row[2], row[3]] for row in rows]
+        print(tb(table_data, headers=headers, tablefmt="double_grid"))
+        
     cur.close()
     conn.close()
     input("\nTekan Enter untuk kembali ke menu...")
 
 # ======== Supplier Things ===========
 def tambah_stok(id_user):
-    conn = connect()
-    cur = conn.cursor()
-    id_stok = generate_id("SSO", "stok_sampah_organik", "id_stok_sampah")
-    id_sampah = input("ID Sampah Organik: ")
-    jumlah = int(input("Jumlah (kg): "))
-    status = input("Status (tersedia/habis): ")
-    cur.execute("INSERT INTO stok_sampah_organik (id_stok_sampah, id_sampah_organik, jumlah_kg, status) VALUES (%s, %s, %s, %s)", (id_stok, id_sampah, jumlah, status))
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("Stok sampah ditambahkan.")
+    conn = None
+    cur = None
 
-def lihat_stok(id_user):
-    conn = connect()
-    cur = conn.cursor()
-    cur.execute("SELECT ss.id_stok_sampah, so.jenis_sampah, ss.jumlah_kg, ss.status FROM stok_sampah_organik ss JOIN sampah_organik so ON ss.id_sampah_organik = so.id_sampah_organik WHERE so.id_supplier = %s", (id_user,))
-    rows = cur.fetchall()
-    print("Stok Sampah Anda :")
-    for row in rows:
-        print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Status: {row[3]}")
-    cur.close()
-    conn.close()
+    try:
+        conn = connect()
+        cur = conn.cursor()
+        print("\n--- Tambah Stok Sampah Organik ---")
+
+        # Input ID Sampah
+        while True:
+            id_sampah = input("ID Sampah Organik: ").strip()
+            if not id_sampah:
+                print("ID Sampah tidak boleh kosong.")
+                continue
+
+            cur.execute("SELECT 1 FROM sampah_organik WHERE id_sampah_organik = %s AND id_supplier = %s", (id_sampah, id_user))
+            if cur.fetchone():
+                break
+            else:
+                print("ID Sampah tidak ditemukan atau bukan milik Anda.")
+
+        while True:
+            jumlah_input = input("Jumlah (kg): ").strip()
+            if not jumlah_input:
+                print("Jumlah tidak boleh kosong.")
+                continue
+            try:
+                jumlah = int(jumlah_input)
+                if jumlah <= 0:
+                    print("Jumlah harus lebih besar dari nol.")
+                else:
+                    break
+            except ValueError:
+                print("Input harus berupa angka.")
+
+        while True:
+            status = input("Status (tersedia/habis): ").strip().lower()
+            if status in ['tersedia', 'habis']:
+                break
+            else:
+                print("Status harus 'tersedia' atau 'habis'.")
+        id_stok = generate_id("SSO", "stok_sampah_organik", "id_stok_sampah")
+
+        # Eksekusi INSERT
+        cur.execute("""
+            INSERT INTO stok_sampah_organik 
+            (id_stok_sampah, id_sampah_organik, jumlah_kg, status)
+            VALUES (%s, %s, %s, %s)
+        """, (id_stok, id_sampah, jumlah, status))
+
+        conn.commit()
+        print("Stok sampah berhasil ditambahkan.")
+
+    except psycopg2.DatabaseError as e:
+        if conn:
+            conn.rollback()
+        print(f"Terjadi kesalahan pada database: {e}")
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f"Error umum: {e}")
+
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
+        input("\nTekan Enter untuk kembali...")
+
 
 def terima_pesanan(id_user):
     conn = connect()
@@ -758,30 +968,27 @@ def beli_maggot(id_user):
         conn.close()
         input("\nTekan Enter untuk kembali ke menu...")
 
-def catat_harian(id_user):
-    conn = connect()
-    cur = conn.cursor()
-    id_transaksi = generate_id("TS", "transaksi_sampah_organik", "id_transaksi_sampah")
-    deskripsi = input("Deskripsi kegiatan: ")
-    cur.execute("INSERT INTO transaksi_sampah_organik (id_transaksi_sampah, id_pembeli, id_sampah_organik, jumlah_kg, deskripsi, status) VALUES (%s, %s, NULL, 0, %s, 'harian')", (id_transaksi, id_user, deskripsi))
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("Catatan harian supplier disimpan.")
-
 def riwayat_penjualan(id_user):
     conn = connect()
     cur = conn.cursor()
-    cur.execute("SELECT ts.id_transaksi_sampah, so.jenis_sampah, ts.jumlah_kg, ts.deskripsi FROM transaksi_sampah_organik ts JOIN sampah_organik so ON ts.id_sampah_organik = so.id_sampah_organik WHERE so.id_supplier = %s AND ts.status = 'diproses'", (id_user,))
+    cur.execute("""
+        SELECT ts.id_transaksi_sampah, so.jenis_sampah, ts.jumlah_kg, ts.deskripsi 
+        FROM transaksi_sampah_organik ts
+        JOIN sampah_organik so ON ts.id_sampah_organik = so.id_sampah_organik 
+        WHERE so.id_supplier = %s AND ts.status = 'diproses'
+    """, (id_user,))
+    
     rows = cur.fetchall()
-
+    clear_screen()
     print("\nRiwayat Penjualan Sampah:")
+    
     if not rows:
         print("Belum ada riwayat penjualan.")
     else:
-        for row in rows:
-            print(f"ID: {row[0]}, Jenis: {row[1]}, Jumlah: {row[2]}kg, Catatan: {row[3]}")
-
+        headers = ["ID Transaksi", "Jenis Sampah", "Jumlah (kg)", "Catatan"]
+        table_data = [[row[0], row[1], f"{row[2]} kg", row[3]] for row in rows]
+        print(tb(table_data, headers=headers, tablefmt="grid"))
+    
     cur.close()
     conn.close()
     input("\nTekan Enter untuk kembali ke menu...")
@@ -840,10 +1047,9 @@ def menu_pembudidaya(id_user):
         print("""
 [1] Menu Maggot
 [2] Menu Sampah Organik
-[3] Catat Harian
-[4] Riwayat Penjualan Maggot
-[5] Riwayat Pembelian Sampah
-[6] Profile
+[3] Riwayat Penjualan Maggot
+[4] Riwayat Pembelian Sampah
+[5] Profile
 [0] Logout
     """)
         pilihan = input("Masukkan pilihan: ")
@@ -856,7 +1062,6 @@ Menu Maggot:
 [1] Tambah Stok Maggot
 [2] Lihat Stok Maggot
 [3] Jual Maggot
-[4] Beli Sampah Organik
 [0] Kembali ke Menu Utama
                     """)
                     pilihan_maggot = input("Masukkan pilihan: ")
@@ -868,8 +1073,6 @@ Menu Maggot:
                             lihat_stok_maggot(id_user)
                         case '3':
                             jual_maggot(id_user)
-                        case '4':
-                            beli_sampah_organik(id_user)
                         case '0':
                             break
                         case _:
@@ -887,7 +1090,7 @@ Menu Sampah Organik:
 
                     match pilihan_sampah:
                         case '1':
-                            lihat_stok_maggot(id_user)
+                            lihat_stok_sampah_dibeli()
                         case '2':
                             beli_sampah_organik(id_user)
                         case '0':
@@ -895,12 +1098,10 @@ Menu Sampah Organik:
                         case _:
                             print("Pilihan tidak valid.")
             case '3':
-                catat_harian(id_user)
-            case '4':
-                riwayat_transaksi_penjualan(id_user)
-            case '5':
                 riwayat_transaksi_pembelian(id_user)
-            case '6':
+            case '4':
+                riwayat_transaksi_pembelian(id_user)
+            case '5':
                 profile(id_user)
             case '0':
                 main()
@@ -915,9 +1116,8 @@ def menu_supplier(id_user):
 Menu Supplier:
 [1] Menu Maggot
 [2] Menu Sampah Organik
-[3] Catat Harian
-[4] Riwayat Penjualan Sampah
-[5] Riwayat Pembelian Maggot
+[3] Riwayat Penjualan Sampah
+[4] Riwayat Pembelian Maggot
 [0] Logout
         """)
             pilihan = input("Masukkan pilihan: ")
@@ -928,8 +1128,7 @@ Menu Supplier:
                         print("""
 Menu Maggot:
 [1] Beli Maggot
-[2] Catat Harian
-[3] Riwayat Pembelian Maggot
+[2] Riwayat Pembelian Maggot
 [0] Kembali ke Menu Utama
                         """)
                         pilihan_maggot = input("Masukkan pilihan: ")
@@ -938,8 +1137,6 @@ Menu Maggot:
                             case '1':
                                 beli_maggot(id_user)
                             case '2':
-                                catat_harian(id_user)
-                            case '3':
                                 riwayat_pembelian(id_user)
                             case '0':
                                 break
@@ -961,7 +1158,7 @@ Menu Sampah Organik:
                             case '1':
                                 tambah_stok(id_user)
                             case '2':
-                                lihat_stok(id_user)
+                                lihat_stok_sampah(id_user)
                             case '3':
                                 terima_pesanan(id_user)
                             case '0':
@@ -969,10 +1166,8 @@ Menu Sampah Organik:
                             case _:
                                 print("Pilihan tidak valid.")
                 case '3':
-                    catat_harian(id_user)
-                case '4':
                     riwayat_penjualan(id_user)
-                case '5':
+                case '4':
                     riwayat_pembelian(id_user)
                 case '0':
                     main()
@@ -1006,6 +1201,7 @@ def main():
                 print("[2] Admin")
                 pilih = input("Masukkan pilihan login : ").strip()
                 if pilih == "1":
+                    clear_screen()
                     user = login_user()
                     if user:
                         if user['role'] == 'pembudidaya':
@@ -1013,6 +1209,7 @@ def main():
                         elif user['role'] == 'supplier':
                             menu_supplier(user['id_user'])
                 elif pilih == "2":
+                    clear_screen()
                     admin = login_admin()
                     if admin:
                         menu_admin(admin)
