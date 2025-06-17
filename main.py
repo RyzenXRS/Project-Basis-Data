@@ -630,14 +630,12 @@ def beli_sampah_organik(id_user):
     cur = None
 
     try:
-        # Koneksi database
         conn = connect()
         cur = conn.cursor()
 
         clear_screen()
         print("=== Daftar Sampah Organik Tersedia ===\n")
 
-        # Ambil data stok yang tersedia
         cur.execute("""
             SELECT 
                 ss.id_stok_sampah,
@@ -663,7 +661,6 @@ def beli_sampah_organik(id_user):
         print(tb(table_data, headers=headers, tablefmt="double_grid"))
         print("\nMasukkan ID Stok untuk membeli.")
 
-        # Input ID Stok
         while True:
             id_stok = input("ID Stok (ketik 'batal' untuk batal): ").strip()
             if id_stok.lower() == 'batal':
